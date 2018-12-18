@@ -1,6 +1,6 @@
 # Knowledge Base Question Answering 
 
-## 질문과 질문과 관련된 정답 kb triple이 주어졌을 때 응답 문장을 생성하는 모델
+### 질문과 질문과 관련된 정답 kb triple이 주어졌을 때 응답 문장을 생성하는 모델
 ![model](https://user-images.githubusercontent.com/37574306/50127836-17510580-02b6-11e9-9773-1ab4af72af47.png)
 # 질문과 kb triple은 동일 encoder를 통과
 

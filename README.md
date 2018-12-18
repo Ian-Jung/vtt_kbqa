@@ -5,7 +5,7 @@
 ##### 질문과 kb triple은 동일 encoder를 통과
 
 ##### 필수 라이브러리 : nltk, pytorch 0.4
-##### 필요 파일 : question file(input1), knowledge base triple file(input2), answer(target) file
+##### 필요 파일 : question file(source 1), knowledge base triple file(source 2), answer(target) file
 
 ##### 각 파일의 입력 예시
 | 파일 유형    |     예시    |

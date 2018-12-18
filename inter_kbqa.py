@@ -10,6 +10,8 @@ import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
 
+import nltk
+
 USE_CUDA = True
 
 SOS_token = 0
@@ -353,16 +355,23 @@ def open_data(path) :
                 sent_list.append(input_lang.word_to_index(nl_word))
             kb_pair.append(sent_list)
 
-    with open(path + 'target.txt', 'r', encoding = 'utf-8') as f :
-        for nl_sent in f :
-            sent_list = []
-            nl_sent = nl_sent.rstrip()
-            for nl_word in nl_sent.split() :
-                sent_list.append(target_lang.word_to_index(nl_word))
-            sent_list.append(EOS_token)
-            trg_pair.append(sent_list)
+    if 'test' not in path : 
+        with open(path + 'target.txt', 'r', encoding = 'utf-8') as f :
+            for nl_sent in f :
+                sent_list = []
+                nl_sent = nl_sent.rstrip()
+                for nl_word in nl_sent.split() :
+                    sent_list.append(target_lang.word_to_index(nl_word))
+                sent_list.append(EOS_token)
+                trg_pair.append(sent_list)
+    else : 
+        with open(path + 'target.txt', 'r', encoding = 'utf-8') as f :
+            for nl_sent in f :
+                sent_list = []
+                nl_sent = nl_sent.rstrip().split()
+                trg_pair.append(nl_sent)
 
-    print('[Dataload] size of src_pair : %d, kb pair : %d, target pair : %d'%(len(src_pair), len(kb_pair), len(trg_pair)))
+        print('[Dataload] size of src_pair : %d, kb pair : %d, target pair : %d'%(len(src_pair), len(kb_pair), len(trg_pair)))
     return src_pair, kb_pair, trg_pair
 
 
@@ -386,6 +395,7 @@ print('[Dataload] Data Train / Valid / Test Data ')
 train_src, train_kb, train_trg = open_data('dataset/train/')
 valid_src, valid_kb, valid_trg = open_data('dataset/valid/')
 test_src, test_kb, test_trg = open_data('dataset/test/')
+
 
 attn_model = 'general'
 hidden_size = 200
@@ -425,7 +435,7 @@ min_loss = 999999
 teacher_forcing_ratio = 0.5
 
 for epoch in range(1, n_epochs + 1):
-    # Train
+    # Enter Train Model
     encoder.train()
     decoder.train()
 
@@ -450,29 +460,9 @@ for epoch in range(1, n_epochs + 1):
     if hit_count == accept_hit :
         sys.exit(1)
 
-    # Eval
-    # Valid
+    # Enter Eval mode
     encoder.eval()
     decoder.eval()
-
-    valid_predicts, inter_attn_qs, inter_attn_kbs = [], [], []
-    for i in range(num_valid) :
-        input_variable = torch.LongTensor(valid_src[i]).cuda()
-        kb_variable = torch.LongTensor(valid_kb[i]).cuda()
-        target_variable = torch.LongTensor(valid_trg[i]).cuda()
-
-        decoder_predict, attn_q, attn_kb = test(input_variable, kb_variable, target_variable, encoder, decoder)
-        valid_predicts.append(decoder_predict.data.tolist())
-        inter_attn_qs.append(attn_q)
-        inter_attn_kbs.append(attn_kb)
-
-    # Save entire results & model
-    with open('result/valid_predicts.json', 'w', encoding = 'utf-8') as f:
-        json.dump(valid_predicts, f)
-    with open('result/valid_attn_q.json', 'w', encoding = 'utf-8') as f:
-        json.dump(inter_attn_qs, f)
-    with open('result/valid_attn_kb.json', 'w', encoding = 'utf-8') as f:
-        json.dump(inter_attn_kbs, f)
 
     # Test
     decoder_predicts, inter_attn_qs, inter_attn_kbs = [], [], []
@@ -487,14 +477,33 @@ for epoch in range(1, n_epochs + 1):
         inter_attn_kbs.append(attn_kb)
 
     # Save entire results & model
+    bleu_scores = 0
     with open('result/test_predicts.json', 'w', encoding = 'utf-8') as f:
-        json.dump(decoder_predicts, f)
-    with open('result/test_attn_q.json', 'w', encoding = 'utf-8') as f:
-        json.dump(inter_attn_qs, f)
-    with open('result/test_attn_kb.json', 'w', encoding = 'utf-8') as f:
-        json.dump(inter_attn_kbs, f)
+        #json.dump(decoder_predicts, f)
+        for _idx in range(len(decoder_predicts)) :
+            pred_sent = ''
+            trg_word = test_trg[_idx]
+            for word in decoder_predicts[_idx][0] :
+                if word == 0 or word == 1:
+                    continue
+                word = input_lang.index2word[int(word)]
+                pred_sent = pred_sent + ' ' + word
+                pred_sent = re.sub(' +', ' ', pred_sent)
+
+                # If you want to measure bleu score
+                sf = nltk.translate.bleu_score.SmoothingFunction()
+                bleu_score =  nltk.translate.bleu_score.sentence_bleu([trg_word], pred_sent.split(), smoothing_function = sf.method1)
+                bleu_scores += bleu_score
+
+            f.write(sent + '\n')
+
+    print('test bleu score : %.4f'%(bleu_score))
+    
+    # If you want to save attnetion weights ... 
+    #with open('result/test_attn_q.json', 'w', encoding = 'utf-8') as f:
+    #    json.dump(inter_attn_qs, f)
+    #with open('result/test_attn_kb.json', 'w', encoding = 'utf-8') as f:
+    #    json.dump(inter_attn_kbs, f)
 
     torch.save(encoder, 'model/encoder_q.pt')
     torch.save(decoder, 'model/decoder_kb.pt')
-
-
